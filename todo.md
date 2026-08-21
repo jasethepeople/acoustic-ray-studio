@@ -1,0 +1,23 @@
+# Project TODO
+
+- [x] Define shared models for rooms, surfaces, materials, acoustic nodes, ray paths, and octave-band metrics.
+- [x] Add persistent room-project storage with user-scoped tRPC procedures and database schema migration.
+- [x] Implement validated Sabine, Eyring, Doppler, absorption, and ray reflection utilities with Vitest coverage.
+- [x] Install and integrate Three.js for a WebGL room editor with orbit, pan, zoom, a floor grid, and metric snapping.
+- [x] Render editable walls, floor, and ceiling with per-surface concrete, glass, and wood assignments.
+- [x] Add interactive sound-source and listener nodes with speaker/ear markers, draggable positions, and node parameter inspectors.
+- [x] Compute configurable real-time ray bounces, material absorption, and colored reflection paths in the 3D viewport.
+- [x] Build RT60 and acoustic-performance panels covering 125 Hz through 8 kHz with direct material coefficients.
+- [x] Build a dark, monochrome, #FFA500 phosphor-HUD workstation layout with collapsible inspectors and oscilloscope.
+- [x] Integrate Web Audio spatial panning, live Doppler behavior, source controls, MediaRecorder capture, and audio export.
+- [x] Export room material maps and multi-band RT60 metrics as a JSON acoustic report.
+- [x] Add client-side interaction tests and server-side Vitest coverage, then verify responsive visual rendering.
+- [x] Save the completed project checkpoint and provide the user with the project version.
+- [x] Replace the generic viewport node markers with legible speaker and ear icon meshes while preserving selection and drag behavior.
+- [x] Verify source and listener markers remain legible across viewport zoom levels.
+- [x] Stabilize speaker and ear icon visibility with zoom-independent sprites and document the associated viewport QA behavior.
+- [x] Normalize all HUD text, borders, and active highlights to the required exact #FFA500 signal color.
+- [x] Add visible browser-audio error states for AudioContext availability, audio-resume failures, recording support, and recording/export failures.
+- [x] Apply a final exact-#FFA500 cascade override for HUD text, panel borders, selection edges, and active instrumentation highlights.
+- [x] Verify mobile and tablet workbench rendering with explicit viewport captures and document the responsive QA result.
+- [x] Remove canvas warnings from the client interaction test environment.

@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { acousticProjects, InsertUser, users } from "../drizzle/schema";
+import type { AcousticProjectSnapshot } from "../shared/acoustics";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +90,26 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function listAcousticProjects(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(acousticProjects).where(eq(acousticProjects.ownerId, ownerId)).orderBy(desc(acousticProjects.updatedAt));
+}
+
+export async function saveAcousticProject(input: {
+  id?: number;
+  ownerId: number;
+  name: string;
+  snapshot: AcousticProjectSnapshot;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  if (input.id) {
+    await db.update(acousticProjects).set({ name: input.name, snapshot: input.snapshot }).where(and(eq(acousticProjects.id, input.id), eq(acousticProjects.ownerId, input.ownerId)));
+    const saved = await db.select().from(acousticProjects).where(and(eq(acousticProjects.id, input.id), eq(acousticProjects.ownerId, input.ownerId))).limit(1);
+    return saved[0];
+  }
+  await db.insert(acousticProjects).values({ ownerId: input.ownerId, name: input.name, snapshot: input.snapshot });
+  const saved = await db.select().from(acousticProjects).where(eq(acousticProjects.ownerId, input.ownerId)).orderBy(desc(acousticProjects.id)).limit(1);
+  return saved[0];
+}
