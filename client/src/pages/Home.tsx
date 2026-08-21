@@ -7,15 +7,21 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { ChevronDown, CircleDot, Crosshair, Ear, FileJson, Grid3X3, Layers3, Move3D, Pause, Play, Plus, Radio, RotateCcw, Save, Settings2, SlidersHorizontal, Volume2 } from "lucide-react";
 import React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MATERIALS, OCTAVE_BANDS, DEFAULT_PROJECT, type AcousticNode, type AcousticProjectSnapshot, type MaterialId, type SurfaceRole, type Vec3 } from "@shared/acoustics";
 import { calculateBandMetrics, estimateDopplerFrequency, roomVolume } from "@shared/acousticMath";
 import { createAcousticReport } from "@shared/acousticReport";
+import { RAY_QUALITY_OPTIONS, recommendRayCount, type RayQuality, type RendererDeviceProfile, type RendererHealth } from "@shared/rendererPerformance";
 
 const surfaceIcons: Record<SurfaceRole, string> = { floor: "F", ceiling: "C", north: "N", south: "S", east: "E", west: "W" };
 
 function formatPosition(position: Vec3) {
   return `${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}`;
+}
+
+function getRendererDeviceProfile(): RendererDeviceProfile {
+  const browserNavigator = navigator as Navigator & { deviceMemory?: number };
+  return { viewportWidth: window.innerWidth, cores: browserNavigator.hardwareConcurrency, memoryGb: browserNavigator.deviceMemory };
 }
 
 export default function Home() {
@@ -25,6 +31,8 @@ export default function Home() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [sceneOpen, setSceneOpen] = useState(true);
   const [savedProjectId, setSavedProjectId] = useState<number | undefined>();
+  const [rayQuality, setRayQuality] = useState<RayQuality>("adaptive");
+  const [rendererHealth, setRendererHealth] = useState<RendererHealth>({ fps: 60, width: 0, height: 0, pixelRatio: 1, resizeEvents: 0, status: "STABLE" });
   const { isAuthenticated } = useAuth();
   const storedProjects = trpc.acousticProjects.list.useQuery(undefined, { enabled: isAuthenticated });
   const saveProjectMutation = trpc.acousticProjects.save.useMutation({
@@ -33,6 +41,10 @@ export default function Home() {
     },
   });
   const { analyser, audioError, isPlaying, isRecording, start, stop, toggleRecording } = useAcousticAudio(project);
+
+  useEffect(() => {
+    setProject((current) => ({ ...current, rayCount: recommendRayCount("adaptive", getRendererDeviceProfile()) }));
+  }, []);
 
   const metrics = useMemo(() => calculateBandMetrics(project), [project]);
   const selectedNode = project.nodes.find((node) => node.id === selectedNodeId) ?? project.nodes[0];
@@ -87,6 +99,10 @@ export default function Home() {
       return;
     }
     saveProjectMutation.mutate({ id: savedProjectId, name: "Untitled chamber", snapshot: project });
+  };
+  const selectRayQuality = (quality: Exclude<RayQuality, "custom">) => {
+    setRayQuality(quality);
+    setProject((current) => ({ ...current, rayCount: recommendRayCount(quality, getRendererDeviceProfile()) }));
   };
 
   return (
@@ -146,8 +162,10 @@ export default function Home() {
 
           <div className="hud-panel ray-panel">
             <div className="panel-heading"><span>RAY FIELD</span><span className="warning-readout">{project.rayCount} rays</span></div>
+            <label className="control-label">RAY QUALITY <output>{rayQuality === "custom" ? "MANUAL" : RAY_QUALITY_OPTIONS.find((option) => option.id === rayQuality)?.label}</output></label>
+            <div className="quality-selector">{RAY_QUALITY_OPTIONS.map((option) => <button key={option.id} onClick={() => selectRayQuality(option.id)} className={rayQuality === option.id ? "is-selected" : ""}>{option.label}</button>)}</div>
             <label className="control-label">EMISSION DENSITY <output>{project.rayCount}</output></label>
-            <input type="range" min="12" max="160" step="2" value={project.rayCount} onChange={(event) => setProject((current) => ({ ...current, rayCount: Number(event.target.value) }))} />
+            <input type="range" min="12" max="160" step="2" value={project.rayCount} onChange={(event) => { setRayQuality("custom"); setProject((current) => ({ ...current, rayCount: Number(event.target.value) })); }} />
             <label className="control-label">MAX BOUNCES <output>{project.maxBounces}</output></label>
             <input type="range" min="1" max="9" value={project.maxBounces} onChange={(event) => setProject((current) => ({ ...current, maxBounces: Number(event.target.value) }))} />
             <label className="control-label">ANALYSIS BAND <output>{project.targetBand >= 1000 ? `${project.targetBand / 1000}k` : project.targetBand} Hz</output></label>
@@ -161,10 +179,11 @@ export default function Home() {
 
         <section className="viewport-wrap">
           <div className="viewport-header"><span><span className="crosshair-mark">⌖</span> PERSPECTIVE / REAL-TIME RAY TRACE</span><span>ORBIT · PAN · ZOOM</span></div>
-          <AcousticViewport project={project} selectedSurface={selectedSurface} selectedNodeId={selectedNodeId} onSelectSurface={setSelectedSurface} onSelectNode={setSelectedNodeId} onMoveNode={updateNodePosition} />
+          <AcousticViewport project={project} selectedSurface={selectedSurface} selectedNodeId={selectedNodeId} onSelectSurface={setSelectedSurface} onSelectNode={setSelectedNodeId} onMoveNode={updateNodePosition} onHealthChange={setRendererHealth} />
           <div className="viewport-card coord-card"><span>CURSOR / WORLD</span><b>{selectedNode ? formatPosition(selectedNode.position) : "0.00 / 0.00 / 0.00"}</b></div>
           <div className="viewport-card legend-card"><span><i className="dot source-dot" /> SPEAKER</span><span><i className="dot listener-dot" /> EAR / LISTENER</span><span><i className="ray-swatch" /> REFLECTION PATH</span></div>
           <div className="viewport-card scale-card"><span>0</span><i /><span>2 m</span></div>
+          <div className="viewport-card health-card" aria-live="polite"><span>RENDER / {rendererHealth.status}</span><b>{rendererHealth.fps} FPS · {rendererHealth.width}×{rendererHealth.height}</b><small>DPR {rendererHealth.pixelRatio.toFixed(1)} · RZ {rendererHealth.resizeEvents}</small></div>
         </section>
 
         <aside className="right-stack">

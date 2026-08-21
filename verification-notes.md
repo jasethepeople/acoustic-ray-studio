@@ -13,3 +13,5 @@ Responsive QA was captured at desktop, tablet, and 375 px mobile widths. The des
 Release validation completed with four Vitest files and six passing tests: acoustic calculation behavior, authenticated logout behavior, report content, and add-source client interaction. The client interaction test mocks canvas-only rendering so it runs cleanly in JSDOM.
 
 The WebGL resize lifecycle now queues observer notifications into a single animation frame and calls Three.js `setSize` without mutating CSS layout styles. This breaks the feedback loop that caused the reported undelivered ResizeObserver notification warning while preserving the viewport’s rendering dimensions.
+
+The enhanced performance workflow was verified at desktop and 375 px mobile widths. The renderer-health HUD reports active FPS, viewport dimensions, device pixel ratio, and coalesced resize events. Adaptive quality selected 48 rays in the desktop preview and 28 rays in the compact preview, while ECO, STD, and MAX remain available as explicit override profiles.

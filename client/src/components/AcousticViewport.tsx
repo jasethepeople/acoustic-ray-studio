@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { MATERIALS, type AcousticNode, type AcousticProjectSnapshot, type SurfaceRole, type Vec3 } from "@shared/acoustics";
 import { traceRay } from "@shared/acousticMath";
+import { createFrameScheduledResize } from "@shared/rendererResize";
+import type { RendererHealth } from "@shared/rendererPerformance";
 
 type AcousticViewportProps = {
   project: AcousticProjectSnapshot;
@@ -11,6 +13,7 @@ type AcousticViewportProps = {
   onSelectSurface: (surface: SurfaceRole) => void;
   onSelectNode: (nodeId: string) => void;
   onMoveNode: (nodeId: string, position: Vec3) => void;
+  onHealthChange: (health: RendererHealth) => void;
 };
 
 const NODE_COLORS: Record<AcousticNode["kind"], number> = { source: 0xff7f11, listener: 0xf4db92 };
@@ -120,10 +123,10 @@ function unitDirection(index: number, count: number) {
   return { x: Math.cos(theta) * radius, y: y * 0.52, z: Math.sin(theta) * radius };
 }
 
-export default function AcousticViewport({ project, selectedSurface, selectedNodeId, onSelectSurface, onSelectNode, onMoveNode }: AcousticViewportProps) {
+export default function AcousticViewport({ project, selectedSurface, selectedNodeId, onSelectSurface, onSelectNode, onMoveNode, onHealthChange }: AcousticViewportProps) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const callbacks = useRef({ onSelectSurface, onSelectNode, onMoveNode, project });
-  callbacks.current = { onSelectSurface, onSelectNode, onMoveNode, project };
+  const callbacks = useRef({ onSelectSurface, onSelectNode, onMoveNode, onHealthChange, project });
+  callbacks.current = { onSelectSurface, onSelectNode, onMoveNode, onHealthChange, project };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -208,24 +211,22 @@ export default function AcousticViewport({ project, selectedSurface, selectedNod
       });
     };
     rebuild();
-    let resizeFrame = 0;
-    let appliedWidth = initialWidth;
-    let appliedHeight = initialHeight;
-    const resize = () => {
-      if (resizeFrame) return;
-      resizeFrame = requestAnimationFrame(() => {
-        resizeFrame = 0;
-        const width = Math.max(1, Math.floor(mount.clientWidth));
-        const height = Math.max(1, Math.floor(mount.clientHeight));
-        if (width === appliedWidth && height === appliedHeight) return;
-        appliedWidth = width;
-        appliedHeight = height;
+    let currentFps = 60;
+    const reportHealth = (width: number, height: number, resizeEvents: number, status: RendererHealth["status"]) => {
+      callbacks.current.onHealthChange({ fps: currentFps, width, height, pixelRatio: renderer.getPixelRatio(), resizeEvents, status });
+    };
+    const resizeScheduler = createFrameScheduledResize({
+      initialSize: { width: initialWidth, height: initialHeight },
+      readSize: () => ({ width: Math.max(1, Math.floor(mount.clientWidth)), height: Math.max(1, Math.floor(mount.clientHeight)) }),
+      applySize: ({ width, height }, resizeEvents) => {
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height, false);
-      });
-    };
-    const observer = new ResizeObserver(resize);
+        reportHealth(width, height, resizeEvents, "SYNC");
+      },
+    });
+    reportHealth(initialWidth, initialHeight, 0, "STABLE");
+    const observer = new ResizeObserver(resizeScheduler.schedule);
     observer.observe(mount);
     const setPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -270,15 +271,25 @@ export default function AcousticViewport({ project, selectedSurface, selectedNod
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
     let frame = 0;
+    let sampledFrames = 0;
+    let sampleStartedAt = performance.now();
     const animate = () => {
       frame = requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
+      sampledFrames += 1;
+      const now = performance.now();
+      if (now - sampleStartedAt >= 850) {
+        currentFps = Math.round((sampledFrames * 1000) / (now - sampleStartedAt));
+        reportHealth(Math.max(1, Math.floor(mount.clientWidth)), Math.max(1, Math.floor(mount.clientHeight)), resizeScheduler.getResizeEvents(), "STABLE");
+        sampledFrames = 0;
+        sampleStartedAt = now;
+      }
     };
     animate();
     return () => {
       cancelAnimationFrame(frame);
-      cancelAnimationFrame(resizeFrame);
+      resizeScheduler.cancel();
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);

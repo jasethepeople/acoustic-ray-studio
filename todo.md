@@ -23,3 +23,7 @@
 - [x] Remove canvas warnings from the client interaction test environment.
 - [x] Replace direct ResizeObserver renderer updates with frame-scheduled resizing to prevent undelivered-notification loops.
 - [x] Verify viewport resizing after the change and save a corrective checkpoint.
+- [x] Add a renderer-health HUD readout that reports viewport dimensions, frame performance, and resize stability.
+- [x] Add user-selectable adaptive ray-quality profiles that scale ray density for device capability.
+- [x] Add ResizeObserver scheduling and repeated-resize stress coverage for the WebGL viewport lifecycle.
+- [x] Validate the enhanced controls, performance telemetry, and viewport resilience before delivery.
