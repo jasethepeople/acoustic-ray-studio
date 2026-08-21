@@ -21,3 +21,5 @@
 - [x] Apply a final exact-#FFA500 cascade override for HUD text, panel borders, selection edges, and active instrumentation highlights.
 - [x] Verify mobile and tablet workbench rendering with explicit viewport captures and document the responsive QA result.
 - [x] Remove canvas warnings from the client interaction test environment.
+- [x] Replace direct ResizeObserver renderer updates with frame-scheduled resizing to prevent undelivered-notification loops.
+- [x] Verify viewport resizing after the change and save a corrective checkpoint.

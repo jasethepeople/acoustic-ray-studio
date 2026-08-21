@@ -11,3 +11,5 @@ The source and listener markers use high-contrast canvas sprite icons, no depth 
 Responsive QA was captured at desktop, tablet, and 375 px mobile widths. The desktop layout preserves the full three-column engineering console. At tablet width the right inspector is intentionally suppressed to protect the WebGL field, while at mobile width the room viewport moves above the project, scene, ray, and RT60 panels so the simulation remains readable without horizontal clipping.
 
 Release validation completed with four Vitest files and six passing tests: acoustic calculation behavior, authenticated logout behavior, report content, and add-source client interaction. The client interaction test mocks canvas-only rendering so it runs cleanly in JSDOM.
+
+The WebGL resize lifecycle now queues observer notifications into a single animation frame and calls Three.js `setSize` without mutating CSS layout styles. This breaks the feedback loop that caused the reported undelivered ResizeObserver notification warning while preserving the viewport’s rendering dimensions.

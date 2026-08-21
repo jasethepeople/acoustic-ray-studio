@@ -128,14 +128,19 @@ export default function AcousticViewport({ project, selectedSurface, selectedNod
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    const initialWidth = Math.max(1, Math.floor(mount.clientWidth));
+    const initialHeight = Math.max(1, Math.floor(mount.clientHeight));
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x080806);
     scene.fog = new THREE.Fog(0x080806, 18, 45);
-    const camera = new THREE.PerspectiveCamera(46, mount.clientWidth / mount.clientHeight, 0.05, 100);
+    const camera = new THREE.PerspectiveCamera(46, initialWidth / initialHeight, 0.05, 100);
     camera.position.set(12.5, 9, 14);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+    renderer.setSize(initialWidth, initialHeight, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -203,12 +208,22 @@ export default function AcousticViewport({ project, selectedSurface, selectedNod
       });
     };
     rebuild();
+    let resizeFrame = 0;
+    let appliedWidth = initialWidth;
+    let appliedHeight = initialHeight;
     const resize = () => {
-      const width = Math.max(1, mount.clientWidth);
-      const height = Math.max(1, mount.clientHeight);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
+      if (resizeFrame) return;
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        const width = Math.max(1, Math.floor(mount.clientWidth));
+        const height = Math.max(1, Math.floor(mount.clientHeight));
+        if (width === appliedWidth && height === appliedHeight) return;
+        appliedWidth = width;
+        appliedHeight = height;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height, false);
+      });
     };
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
@@ -263,6 +278,7 @@ export default function AcousticViewport({ project, selectedSurface, selectedNod
     animate();
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
