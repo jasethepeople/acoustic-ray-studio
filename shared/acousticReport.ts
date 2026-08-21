@@ -1,7 +1,8 @@
 import { calculateBandMetrics, roomVolume } from "./acousticMath";
 import { MATERIALS, type AcousticProjectSnapshot } from "./acoustics";
+import type { RendererHealthSummary } from "./rendererPerformance";
 
-export function createAcousticReport(project: AcousticProjectSnapshot) {
+export function createAcousticReport(project: AcousticProjectSnapshot, rendererHealth: RendererHealthSummary | null = null) {
   return {
     title: "Acoustic Ray Studio Report",
     generatedAt: new Date().toISOString(),
@@ -15,6 +16,11 @@ export function createAcousticReport(project: AcousticProjectSnapshot) {
     })),
     nodes: project.nodes,
     rayTrace: { rayCount: project.rayCount, qualityProfile: project.rayQuality, maxBounces: project.maxBounces, analysisBand: project.targetBand },
+    performance: {
+      latestBenchmark: project.benchmarkHistory.at(-1) ?? null,
+      benchmarkHistory: project.benchmarkHistory,
+      rendererHealth,
+    },
     rt60: calculateBandMetrics(project),
   };
 }

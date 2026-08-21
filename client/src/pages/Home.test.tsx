@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeEach, vi, describe, expect, it } from "vitest";
 import RendererHealthChart from "@/components/RendererHealthChart";
+import BenchmarkVariantComparison from "@/components/BenchmarkVariantComparison";
+import PerformanceStatusBanner from "@/components/PerformanceStatusBanner";
 import type { RendererHealth } from "@shared/rendererPerformance";
 
 vi.mock("@/components/AcousticViewport", () => ({ default: () => <div data-testid="acoustic-viewport" /> }));
@@ -70,5 +72,17 @@ describe("acoustic workstation node controls", () => {
     render(<RendererHealthChart samples={samples} />);
     expect(screen.getByLabelText(/Average 45 FPS/)).toBeTruthy();
     expect(screen.getByText("2 SAMPLES")).toBeTruthy();
+  });
+
+  it("renders low-FPS alerts, recovery confirmation, and multi-sample archived variant comparison", () => {
+    const history = [
+      { measuredFps: 31, recommendation: "eco" as const, sampledAt: "2026-08-21T00:00:00.000Z", sessionAverageFps: 31, sampleCount: 4 },
+      { measuredFps: 46, recommendation: "balanced" as const, sampledAt: "2026-08-21T01:00:00.000Z", sessionAverageFps: 38, sampleCount: 8 },
+    ];
+    const { rerender } = render(<><PerformanceStatusBanner state="low" /><BenchmarkVariantComparison activeHistory={history} variants={[{ id: 9, name: "Studio A", history }]} /></>);
+    expect(screen.getByRole("alert").textContent).toContain("RENDER RATE LOW");
+    expect(screen.getByLabelText("Studio A benchmark history").textContent).toContain("3146");
+    rerender(<PerformanceStatusBanner state="recovered" />);
+    expect(screen.getByRole("status").textContent).toContain("RENDER RATE NOMINAL");
   });
 });

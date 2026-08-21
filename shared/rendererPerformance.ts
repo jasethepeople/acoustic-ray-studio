@@ -15,6 +15,12 @@ export type RendererHealth = {
   status: "SYNC" | "STABLE";
 };
 
+export type RendererHealthSummary = RendererHealth & {
+  sessionAverageFps: number;
+  sessionLowFps: number;
+  sampleCount: number;
+};
+
 export type BenchmarkRecommendation = Exclude<RayQuality, "custom">;
 
 export const RAY_QUALITY_OPTIONS: Array<{ id: Exclude<RayQuality, "custom">; label: string }> = [
@@ -48,4 +54,23 @@ export function calculateMeasuredFps(renderedFrames: number, elapsedMilliseconds
 
 export function appendRendererHealthSample(history: RendererHealth[], sample: RendererHealth, limit = 72) {
   return [...history, sample].slice(-limit);
+}
+
+export function isSustainedLowFps(history: RendererHealth[], threshold = 28, requiredSamples = 4) {
+  if (history.length < requiredSamples) return false;
+  return history.slice(-requiredSamples).every((sample) => sample.fps < threshold);
+}
+
+export function averageSessionFps(history: RendererHealth[]) {
+  if (history.length === 0) return 0;
+  return Math.round(history.reduce((total, sample) => total + sample.fps, 0) / history.length);
+}
+
+export function summarizeRendererHealth(current: RendererHealth, history: RendererHealth[]): RendererHealthSummary {
+  return {
+    ...current,
+    sessionAverageFps: averageSessionFps(history),
+    sessionLowFps: history.length ? Math.min(...history.map((sample) => sample.fps)) : current.fps,
+    sampleCount: history.length,
+  };
 }

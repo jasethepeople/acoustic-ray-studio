@@ -35,3 +35,11 @@
 - [x] Add a persistence round-trip test for a non-default saved ray-quality profile.
 - [x] Verify that benchmark sampling reaches a measured recommendation state and that renderer-health samples accumulate in the session chart.
 - [x] Add a UI-level completed benchmark test and session-chart rendering test with deterministic frame sampling.
+- [x] Include measured benchmark results and renderer-health summary in exported acoustic JSON reports.
+- [x] Add a sustained low-FPS warning threshold with a clear HUD alert and recovery state.
+- [x] Store benchmark summaries with saved projects and compare benchmark histories across project variants.
+- [x] Test and visually verify report telemetry, low-FPS alerts, and saved-project benchmark comparisons.
+- [x] Show the performance-recovered HUD state only after an actual sustained low-FPS alert clears.
+- [x] Export renderer-health FPS, viewport, DPR, resize, status, and session aggregate summary fields.
+- [x] Compare multi-sample benchmark histories across saved project variants rather than only the latest sample.
+- [x] Add UI-level verification for low-FPS alert/recovery and archived benchmark-history comparison states.

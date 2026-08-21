@@ -54,12 +54,21 @@ export type AcousticNode = {
   muted?: boolean;
 };
 
+export type BenchmarkSummary = {
+  measuredFps: number;
+  recommendation: Exclude<RayQuality, "custom">;
+  sampledAt: string;
+  sessionAverageFps: number;
+  sampleCount: number;
+};
+
 export type AcousticProjectSnapshot = {
   room: RoomDimensions;
   surfaces: RoomSurface[];
   nodes: AcousticNode[];
   rayCount: number;
   rayQuality: RayQuality;
+  benchmarkHistory: BenchmarkSummary[];
   maxBounces: number;
   targetBand: OctaveBand;
   gridSize: number;
@@ -81,6 +90,7 @@ export const DEFAULT_PROJECT: AcousticProjectSnapshot = {
   ],
   rayCount: 42,
   rayQuality: "adaptive",
+  benchmarkHistory: [],
   maxBounces: 5,
   targetBand: 1000,
   gridSize: 0.25,

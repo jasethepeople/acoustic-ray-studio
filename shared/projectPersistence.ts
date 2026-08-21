@@ -13,5 +13,6 @@ export function hydrateProjectSnapshot(snapshot: unknown): AcousticProjectSnapsh
     surfaces: candidate?.surfaces ?? DEFAULT_PROJECT.surfaces,
     nodes: candidate?.nodes ?? DEFAULT_PROJECT.nodes,
     rayQuality: candidate?.rayQuality ?? "adaptive",
+    benchmarkHistory: candidate?.benchmarkHistory ?? [],
   };
 }

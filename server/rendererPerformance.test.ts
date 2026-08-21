@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendRendererHealthSample, calculateMeasuredFps, recommendQualityFromBenchmark, recommendRayCount, type RendererHealth } from "../shared/rendererPerformance";
+import { appendRendererHealthSample, averageSessionFps, calculateMeasuredFps, isSustainedLowFps, recommendQualityFromBenchmark, recommendRayCount, summarizeRendererHealth, type RendererHealth } from "../shared/rendererPerformance";
 import { createFrameScheduledResize } from "../shared/rendererResize";
 import { hydrateProjectSnapshot, serializeProjectSnapshot } from "../shared/projectPersistence";
 import { DEFAULT_PROJECT } from "../shared/acoustics";
@@ -28,6 +28,10 @@ describe("renderer performance controls", () => {
     const health = (fps: number): RendererHealth => ({ fps, width: 800, height: 500, pixelRatio: 1, resizeEvents: 0, status: "STABLE" });
     expect(calculateMeasuredFps(90, 1500)).toBe(60);
     expect(appendRendererHealthSample([health(30), health(35)], health(40), 2).map((sample) => sample.fps)).toEqual([35, 40]);
+    expect(averageSessionFps([health(30), health(42), health(48)])).toBe(40);
+    expect(isSustainedLowFps([health(25), health(27), health(24), health(26)])).toBe(true);
+    expect(isSustainedLowFps([health(25), health(27), health(24), health(31)])).toBe(false);
+    expect(summarizeRendererHealth(health(48), [health(30), health(42), health(48)])).toMatchObject({ fps: 48, sessionAverageFps: 40, sessionLowFps: 30, sampleCount: 3, width: 800, height: 500, pixelRatio: 1, resizeEvents: 0, status: "STABLE" });
   });
 
   it("coalesces repeated resize notifications into one frame and ignores unchanged dimensions", () => {

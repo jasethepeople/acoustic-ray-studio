@@ -1,5 +1,7 @@
 import AcousticViewport from "@/components/AcousticViewport";
+import BenchmarkVariantComparison from "@/components/BenchmarkVariantComparison";
 import Oscilloscope from "@/components/Oscilloscope";
+import PerformanceStatusBanner, { type PerformanceState } from "@/components/PerformanceStatusBanner";
 import RendererHealthChart from "@/components/RendererHealthChart";
 import { Button } from "@/components/ui/button";
 import { useAcousticAudio } from "@/hooks/useAcousticAudio";
@@ -9,10 +11,10 @@ import { trpc } from "@/lib/trpc";
 import { Activity, ChevronDown, CircleDot, Crosshair, Ear, FileJson, Grid3X3, Layers3, Move3D, Pause, Play, Plus, Radio, RotateCcw, Save, Settings2, SlidersHorizontal, Volume2 } from "lucide-react";
 import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MATERIALS, OCTAVE_BANDS, DEFAULT_PROJECT, type AcousticNode, type AcousticProjectSnapshot, type MaterialId, type SurfaceRole, type Vec3 } from "@shared/acoustics";
+import { MATERIALS, OCTAVE_BANDS, DEFAULT_PROJECT, type AcousticNode, type AcousticProjectSnapshot, type BenchmarkSummary, type MaterialId, type SurfaceRole, type Vec3 } from "@shared/acoustics";
 import { calculateBandMetrics, estimateDopplerFrequency, roomVolume } from "@shared/acousticMath";
 import { createAcousticReport } from "@shared/acousticReport";
-import { appendRendererHealthSample, calculateMeasuredFps, RAY_QUALITY_OPTIONS, recommendQualityFromBenchmark, recommendRayCount, type RendererDeviceProfile, type RendererHealth } from "@shared/rendererPerformance";
+import { appendRendererHealthSample, averageSessionFps, calculateMeasuredFps, isSustainedLowFps, RAY_QUALITY_OPTIONS, recommendQualityFromBenchmark, recommendRayCount, summarizeRendererHealth, type RendererDeviceProfile, type RendererHealth } from "@shared/rendererPerformance";
 
 const surfaceIcons: Record<SurfaceRole, string> = { floor: "F", ceiling: "C", north: "N", south: "S", east: "E", west: "W" };
 
@@ -39,6 +41,7 @@ export default function Home() {
   const [healthHistory, setHealthHistory] = useState<RendererHealth[]>([]);
   const [benchmarkResult, setBenchmarkResult] = useState<string | null>(null);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const [performanceState, setPerformanceState] = useState<PerformanceState>("nominal");
   const benchmarkFrameRef = useRef<number | null>(null);
   const { isAuthenticated } = useAuth();
   const storedProjects = trpc.acousticProjects.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -62,6 +65,15 @@ export default function Home() {
   const source = project.nodes.find((node) => node.kind === "source");
   const dopplerFrequency = source && listener ? estimateDopplerFrequency(source.frequency, source.position, source.velocity, listener.position, listener.velocity) : 0;
   const volume = roomVolume(project.room);
+  const lowFpsAlert = useMemo(() => isSustainedLowFps(healthHistory), [healthHistory]);
+  const comparisonRows = useMemo(() => (storedProjects.data ?? []).map((saved) => ({ id: saved.id, name: saved.name, history: saved.snapshot.benchmarkHistory ?? [] })).filter((row) => row.history.length > 0), [storedProjects.data]);
+
+  useEffect(() => {
+    setPerformanceState((current) => {
+      if (lowFpsAlert) return "low";
+      return current === "low" ? "recovered" : current;
+    });
+  }, [lowFpsAlert]);
 
   const updateDimension = (field: keyof AcousticProjectSnapshot["room"], value: number) => {
     setProject((current) => ({ ...current, room: { ...current.room, [field]: Number.isFinite(value) ? Math.max(2, value) : current.room[field] } }));
@@ -94,7 +106,7 @@ export default function Home() {
     setSelectedSurface("floor");
   };
   const exportReport = () => {
-    const report = createAcousticReport(project);
+    const report = createAcousticReport(project, summarizeRendererHealth(rendererHealth, healthHistory));
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -129,7 +141,8 @@ export default function Home() {
       if (elapsed >= 1500) {
         const measuredFps = calculateMeasuredFps(renderedFrames, elapsed);
         const recommendation = recommendQualityFromBenchmark(measuredFps, getRendererDeviceProfile());
-        selectRayQuality(recommendation);
+        const benchmark: BenchmarkSummary = { measuredFps, recommendation, sampledAt: new Date().toISOString(), sessionAverageFps: averageSessionFps(healthHistory), sampleCount: healthHistory.length };
+        setProject((current) => ({ ...current, rayQuality: recommendation, rayCount: recommendRayCount(recommendation, getRendererDeviceProfile()), benchmarkHistory: [...current.benchmarkHistory, benchmark].slice(-12) }));
         setBenchmarkResult(`${recommendation.toUpperCase()} · ${measuredFps} FPS`);
         setBenchmarkRunning(false);
         benchmarkFrameRef.current = null;
@@ -160,6 +173,7 @@ export default function Home() {
         </div>
       </header>
       {audioError && <div className="audio-error" role="alert">AUDIO DIAGNOSTIC / {audioError}</div>}
+      <PerformanceStatusBanner state={performanceState} />
 
       <section className="studio-workspace">
         <aside className="tool-rail" aria-label="Scene tools">
@@ -183,6 +197,8 @@ export default function Home() {
             <div className="project-actions"><button onClick={saveProject}><Save size={13} /> {isAuthenticated ? "Save" : "Sign in"}</button><button onClick={exportReport}><FileJson size={13} /> Report</button></div>
             {isAuthenticated && <div className="sync-readout">CLOUD ARCHIVE / {storedProjects.data?.length ?? 0} PROJECT{storedProjects.data?.length === 1 ? "" : "S"}</div>}
           </div>
+
+          {isAuthenticated && <BenchmarkVariantComparison activeHistory={project.benchmarkHistory} variants={comparisonRows} />}
 
           <div className="hud-panel scene-panel">
             <button className="panel-heading collapsible" onClick={() => setSceneOpen((current) => !current)}><span>SCENE GRAPH</span><ChevronDown size={14} className={sceneOpen ? "" : "rotate-180"} /></button>
