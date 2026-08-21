@@ -1,17 +1,18 @@
 import AcousticViewport from "@/components/AcousticViewport";
 import Oscilloscope from "@/components/Oscilloscope";
+import RendererHealthChart from "@/components/RendererHealthChart";
 import { Button } from "@/components/ui/button";
 import { useAcousticAudio } from "@/hooks/useAcousticAudio";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { ChevronDown, CircleDot, Crosshair, Ear, FileJson, Grid3X3, Layers3, Move3D, Pause, Play, Plus, Radio, RotateCcw, Save, Settings2, SlidersHorizontal, Volume2 } from "lucide-react";
+import { Activity, ChevronDown, CircleDot, Crosshair, Ear, FileJson, Grid3X3, Layers3, Move3D, Pause, Play, Plus, Radio, RotateCcw, Save, Settings2, SlidersHorizontal, Volume2 } from "lucide-react";
 import React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MATERIALS, OCTAVE_BANDS, DEFAULT_PROJECT, type AcousticNode, type AcousticProjectSnapshot, type MaterialId, type SurfaceRole, type Vec3 } from "@shared/acoustics";
 import { calculateBandMetrics, estimateDopplerFrequency, roomVolume } from "@shared/acousticMath";
 import { createAcousticReport } from "@shared/acousticReport";
-import { RAY_QUALITY_OPTIONS, recommendRayCount, type RayQuality, type RendererDeviceProfile, type RendererHealth } from "@shared/rendererPerformance";
+import { appendRendererHealthSample, calculateMeasuredFps, RAY_QUALITY_OPTIONS, recommendQualityFromBenchmark, recommendRayCount, type RendererDeviceProfile, type RendererHealth } from "@shared/rendererPerformance";
 
 const surfaceIcons: Record<SurfaceRole, string> = { floor: "F", ceiling: "C", north: "N", south: "S", east: "E", west: "W" };
 
@@ -24,6 +25,9 @@ function getRendererDeviceProfile(): RendererDeviceProfile {
   return { viewportWidth: window.innerWidth, cores: browserNavigator.hardwareConcurrency, memoryGb: browserNavigator.deviceMemory };
 }
 
+const requestBenchmarkFrame = (callback: FrameRequestCallback) => window.requestAnimationFrame ? window.requestAnimationFrame(callback) : window.setTimeout(() => callback(performance.now()), 16);
+const cancelBenchmarkFrame = (frameId: number) => window.cancelAnimationFrame ? window.cancelAnimationFrame(frameId) : window.clearTimeout(frameId);
+
 export default function Home() {
   const [project, setProject] = useState<AcousticProjectSnapshot>(() => structuredClone(DEFAULT_PROJECT));
   const [selectedSurface, setSelectedSurface] = useState<SurfaceRole>("floor");
@@ -31,8 +35,11 @@ export default function Home() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [sceneOpen, setSceneOpen] = useState(true);
   const [savedProjectId, setSavedProjectId] = useState<number | undefined>();
-  const [rayQuality, setRayQuality] = useState<RayQuality>("adaptive");
   const [rendererHealth, setRendererHealth] = useState<RendererHealth>({ fps: 60, width: 0, height: 0, pixelRatio: 1, resizeEvents: 0, status: "STABLE" });
+  const [healthHistory, setHealthHistory] = useState<RendererHealth[]>([]);
+  const [benchmarkResult, setBenchmarkResult] = useState<string | null>(null);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const benchmarkFrameRef = useRef<number | null>(null);
   const { isAuthenticated } = useAuth();
   const storedProjects = trpc.acousticProjects.list.useQuery(undefined, { enabled: isAuthenticated });
   const saveProjectMutation = trpc.acousticProjects.save.useMutation({
@@ -43,7 +50,10 @@ export default function Home() {
   const { analyser, audioError, isPlaying, isRecording, start, stop, toggleRecording } = useAcousticAudio(project);
 
   useEffect(() => {
-    setProject((current) => ({ ...current, rayCount: recommendRayCount("adaptive", getRendererDeviceProfile()) }));
+    setProject((current) => current.rayQuality === "adaptive" ? { ...current, rayCount: recommendRayCount("adaptive", getRendererDeviceProfile()) } : current);
+  }, []);
+  useEffect(() => () => {
+    if (benchmarkFrameRef.current !== null) cancelBenchmarkFrame(benchmarkFrameRef.current);
   }, []);
 
   const metrics = useMemo(() => calculateBandMetrics(project), [project]);
@@ -100,9 +110,34 @@ export default function Home() {
     }
     saveProjectMutation.mutate({ id: savedProjectId, name: "Untitled chamber", snapshot: project });
   };
-  const selectRayQuality = (quality: Exclude<RayQuality, "custom">) => {
-    setRayQuality(quality);
-    setProject((current) => ({ ...current, rayCount: recommendRayCount(quality, getRendererDeviceProfile()) }));
+  const selectRayQuality = (quality: "adaptive" | "eco" | "balanced" | "precision") => {
+    setProject((current) => ({ ...current, rayQuality: quality, rayCount: recommendRayCount(quality, getRendererDeviceProfile()) }));
+  };
+  const updateRendererHealth = useCallback((health: RendererHealth) => {
+    setRendererHealth(health);
+    setHealthHistory((current) => appendRendererHealthSample(current, health));
+  }, []);
+  const runBenchmark = () => {
+    if (benchmarkRunning) return;
+    setBenchmarkRunning(true);
+    setBenchmarkResult(null);
+    const startedAt = performance.now();
+    let renderedFrames = 0;
+    const sample = (now: number) => {
+      renderedFrames += 1;
+      const elapsed = now - startedAt;
+      if (elapsed >= 1500) {
+        const measuredFps = calculateMeasuredFps(renderedFrames, elapsed);
+        const recommendation = recommendQualityFromBenchmark(measuredFps, getRendererDeviceProfile());
+        selectRayQuality(recommendation);
+        setBenchmarkResult(`${recommendation.toUpperCase()} · ${measuredFps} FPS`);
+        setBenchmarkRunning(false);
+        benchmarkFrameRef.current = null;
+        return;
+      }
+      benchmarkFrameRef.current = requestBenchmarkFrame(sample);
+    };
+    benchmarkFrameRef.current = requestBenchmarkFrame(sample);
   };
 
   return (
@@ -162,10 +197,11 @@ export default function Home() {
 
           <div className="hud-panel ray-panel">
             <div className="panel-heading"><span>RAY FIELD</span><span className="warning-readout">{project.rayCount} rays</span></div>
-            <label className="control-label">RAY QUALITY <output>{rayQuality === "custom" ? "MANUAL" : RAY_QUALITY_OPTIONS.find((option) => option.id === rayQuality)?.label}</output></label>
-            <div className="quality-selector">{RAY_QUALITY_OPTIONS.map((option) => <button key={option.id} onClick={() => selectRayQuality(option.id)} className={rayQuality === option.id ? "is-selected" : ""}>{option.label}</button>)}</div>
+            <label className="control-label">RAY QUALITY <output>{project.rayQuality === "custom" ? "MANUAL" : RAY_QUALITY_OPTIONS.find((option) => option.id === project.rayQuality)?.label}</output></label>
+            <div className="quality-selector">{RAY_QUALITY_OPTIONS.map((option) => <button key={option.id} onClick={() => selectRayQuality(option.id)} className={project.rayQuality === option.id ? "is-selected" : ""}>{option.label}</button>)}</div>
+            <button className="benchmark-button" onClick={runBenchmark} disabled={benchmarkRunning}><Activity size={13} /> BENCHMARK <span>{benchmarkRunning ? "SAMPLING LIVE FIELD" : benchmarkResult ?? "MEASURE / RECOMMEND"}</span></button>
             <label className="control-label">EMISSION DENSITY <output>{project.rayCount}</output></label>
-            <input type="range" min="12" max="160" step="2" value={project.rayCount} onChange={(event) => { setRayQuality("custom"); setProject((current) => ({ ...current, rayCount: Number(event.target.value) })); }} />
+            <input type="range" min="12" max="160" step="2" value={project.rayCount} onChange={(event) => setProject((current) => ({ ...current, rayQuality: "custom", rayCount: Number(event.target.value) }))} />
             <label className="control-label">MAX BOUNCES <output>{project.maxBounces}</output></label>
             <input type="range" min="1" max="9" value={project.maxBounces} onChange={(event) => setProject((current) => ({ ...current, maxBounces: Number(event.target.value) }))} />
             <label className="control-label">ANALYSIS BAND <output>{project.targetBand >= 1000 ? `${project.targetBand / 1000}k` : project.targetBand} Hz</output></label>
@@ -179,7 +215,7 @@ export default function Home() {
 
         <section className="viewport-wrap">
           <div className="viewport-header"><span><span className="crosshair-mark">⌖</span> PERSPECTIVE / REAL-TIME RAY TRACE</span><span>ORBIT · PAN · ZOOM</span></div>
-          <AcousticViewport project={project} selectedSurface={selectedSurface} selectedNodeId={selectedNodeId} onSelectSurface={setSelectedSurface} onSelectNode={setSelectedNodeId} onMoveNode={updateNodePosition} onHealthChange={setRendererHealth} />
+          <AcousticViewport project={project} selectedSurface={selectedSurface} selectedNodeId={selectedNodeId} onSelectSurface={setSelectedSurface} onSelectNode={setSelectedNodeId} onMoveNode={updateNodePosition} onHealthChange={updateRendererHealth} />
           <div className="viewport-card coord-card"><span>CURSOR / WORLD</span><b>{selectedNode ? formatPosition(selectedNode.position) : "0.00 / 0.00 / 0.00"}</b></div>
           <div className="viewport-card legend-card"><span><i className="dot source-dot" /> SPEAKER</span><span><i className="dot listener-dot" /> EAR / LISTENER</span><span><i className="ray-swatch" /> REFLECTION PATH</span></div>
           <div className="viewport-card scale-card"><span>0</span><i /><span>2 m</span></div>
@@ -214,6 +250,7 @@ export default function Home() {
             <div className="velocity-strip"><span>SRC VEL <b>{source?.velocity.x.toFixed(1) ?? "0.0"} m/s</b></span><span>LST VEL <b>{listener?.velocity.x.toFixed(1) ?? "0.0"} m/s</b></span></div>
             <div className="scope-header"><span>OSC / MASTER BUS</span><span>{isPlaying ? "RUN" : "IDLE"}</span></div>
             <Oscilloscope analyser={analyser} active={isPlaying} />
+            <RendererHealthChart samples={healthHistory} />
           </div>
         </aside>
       </section>

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { recommendRayCount } from "../shared/rendererPerformance";
+import { appendRendererHealthSample, calculateMeasuredFps, recommendQualityFromBenchmark, recommendRayCount, type RendererHealth } from "../shared/rendererPerformance";
 import { createFrameScheduledResize } from "../shared/rendererResize";
+import { hydrateProjectSnapshot, serializeProjectSnapshot } from "../shared/projectPersistence";
+import { DEFAULT_PROJECT } from "../shared/acoustics";
 
 describe("renderer performance controls", () => {
   it("selects a smaller adaptive ray budget for compact and constrained devices", () => {
@@ -8,6 +10,24 @@ describe("renderer performance controls", () => {
     expect(recommendRayCount("adaptive", { viewportWidth: 1440, cores: 2, memoryGb: 4 })).toBe(48);
     expect(recommendRayCount("adaptive", { viewportWidth: 1440, cores: 8, memoryGb: 8 })).toBe(84);
     expect(recommendRayCount("precision", { viewportWidth: 375 })).toBe(128);
+  });
+
+  it("recommends a profile from measured renderer frame rate and device capacity", () => {
+    expect(recommendQualityFromBenchmark(60, { viewportWidth: 1440, cores: 8, memoryGb: 16 })).toBe("precision");
+    expect(recommendQualityFromBenchmark(45, { viewportWidth: 768, cores: 4, memoryGb: 4 })).toBe("balanced");
+    expect(recommendQualityFromBenchmark(28, { viewportWidth: 1440, cores: 12, memoryGb: 16 })).toBe("eco");
+  });
+
+  it("round-trips a non-default quality profile through the stored project snapshot", () => {
+    const stored = serializeProjectSnapshot({ ...DEFAULT_PROJECT, rayQuality: "precision" });
+    const restored = hydrateProjectSnapshot(JSON.parse(JSON.stringify(stored)));
+    expect(restored.rayQuality).toBe("precision");
+  });
+
+  it("calculates a completed benchmark rate and retains a bounded telemetry session", () => {
+    const health = (fps: number): RendererHealth => ({ fps, width: 800, height: 500, pixelRatio: 1, resizeEvents: 0, status: "STABLE" });
+    expect(calculateMeasuredFps(90, 1500)).toBe(60);
+    expect(appendRendererHealthSample([health(30), health(35)], health(40), 2).map((sample) => sample.fps)).toEqual([35, 40]);
   });
 
   it("coalesces repeated resize notifications into one frame and ignores unchanged dimensions", () => {

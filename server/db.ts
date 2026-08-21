@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { acousticProjects, InsertUser, users } from "../drizzle/schema";
 import type { AcousticProjectSnapshot } from "../shared/acoustics";
+import { hydrateProjectSnapshot, serializeProjectSnapshot } from "../shared/projectPersistence";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -93,7 +94,8 @@ export async function getUserByOpenId(openId: string) {
 export async function listAcousticProjects(ownerId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(acousticProjects).where(eq(acousticProjects.ownerId, ownerId)).orderBy(desc(acousticProjects.updatedAt));
+  const projects = await db.select().from(acousticProjects).where(eq(acousticProjects.ownerId, ownerId)).orderBy(desc(acousticProjects.updatedAt));
+  return projects.map((project) => ({ ...project, snapshot: hydrateProjectSnapshot(project.snapshot) }));
 }
 
 export async function saveAcousticProject(input: {
@@ -104,12 +106,13 @@ export async function saveAcousticProject(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
+  const snapshot = serializeProjectSnapshot(input.snapshot);
   if (input.id) {
-    await db.update(acousticProjects).set({ name: input.name, snapshot: input.snapshot }).where(and(eq(acousticProjects.id, input.id), eq(acousticProjects.ownerId, input.ownerId)));
+    await db.update(acousticProjects).set({ name: input.name, snapshot }).where(and(eq(acousticProjects.id, input.id), eq(acousticProjects.ownerId, input.ownerId)));
     const saved = await db.select().from(acousticProjects).where(and(eq(acousticProjects.id, input.id), eq(acousticProjects.ownerId, input.ownerId))).limit(1);
-    return saved[0];
+    return saved[0] ? { ...saved[0], snapshot: hydrateProjectSnapshot(saved[0].snapshot) } : undefined;
   }
-  await db.insert(acousticProjects).values({ ownerId: input.ownerId, name: input.name, snapshot: input.snapshot });
+  await db.insert(acousticProjects).values({ ownerId: input.ownerId, name: input.name, snapshot });
   const saved = await db.select().from(acousticProjects).where(eq(acousticProjects.ownerId, input.ownerId)).orderBy(desc(acousticProjects.id)).limit(1);
-  return saved[0];
+  return saved[0] ? { ...saved[0], snapshot: hydrateProjectSnapshot(saved[0].snapshot) } : undefined;
 }

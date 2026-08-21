@@ -1,3 +1,5 @@
+import type { RayQuality } from "./rendererPerformance";
+
 export const OCTAVE_BANDS = [125, 250, 500, 1000, 2000, 4000, 8000] as const;
 
 export type OctaveBand = (typeof OCTAVE_BANDS)[number];
@@ -57,6 +59,7 @@ export type AcousticProjectSnapshot = {
   surfaces: RoomSurface[];
   nodes: AcousticNode[];
   rayCount: number;
+  rayQuality: RayQuality;
   maxBounces: number;
   targetBand: OctaveBand;
   gridSize: number;
@@ -77,6 +80,7 @@ export const DEFAULT_PROJECT: AcousticProjectSnapshot = {
     { id: "lst-1", kind: "listener", label: "L-01 / Reference", position: { x: 2.4, y: 1.6, z: 0.8 }, velocity: { x: 0, y: 0, z: 0 }, gain: 1, frequency: 0 },
   ],
   rayCount: 42,
+  rayQuality: "adaptive",
   maxBounces: 5,
   targetBand: 1000,
   gridSize: 0.25,

@@ -14,7 +14,7 @@ export function createAcousticReport(project: AcousticProjectSnapshot) {
       absorptionCoefficients: MATERIALS[surface.materialId].absorption,
     })),
     nodes: project.nodes,
-    rayTrace: { rayCount: project.rayCount, maxBounces: project.maxBounces, analysisBand: project.targetBand },
+    rayTrace: { rayCount: project.rayCount, qualityProfile: project.rayQuality, maxBounces: project.maxBounces, analysisBand: project.targetBand },
     rt60: calculateBandMetrics(project),
   };
 }

@@ -9,5 +9,6 @@ describe("acoustic report export", () => {
     expect(report.materialMap.find((surface) => surface.id === "floor")?.absorptionCoefficients[1000]).toBeGreaterThan(0);
     expect(report.rt60.map((metric) => metric.band)).toEqual(OCTAVE_BANDS);
     expect(report.rt60.every((metric) => metric.sabine > 0 && metric.eyring > 0)).toBe(true);
+    expect(report.rayTrace.qualityProfile).toBe(DEFAULT_PROJECT.rayQuality);
   });
 });

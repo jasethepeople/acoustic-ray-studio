@@ -27,3 +27,11 @@
 - [x] Add user-selectable adaptive ray-quality profiles that scale ray density for device capability.
 - [x] Add ResizeObserver scheduling and repeated-resize stress coverage for the WebGL viewport lifecycle.
 - [x] Validate the enhanced controls, performance telemetry, and viewport resilience before delivery.
+- [x] Persist each project’s chosen ray-quality profile alongside its room snapshot.
+- [x] Add a one-click renderer benchmark that measures current performance and recommends a ray-quality profile.
+- [x] Plot renderer-health FPS history during the active simulation session.
+- [x] Test the persisted quality, benchmark recommendation, and telemetry history workflow before delivery.
+- [x] Sample actual viewport FPS during a timed benchmark pass and show running, measured, and recommendation states.
+- [x] Add a persistence round-trip test for a non-default saved ray-quality profile.
+- [x] Verify that benchmark sampling reaches a measured recommendation state and that renderer-health samples accumulate in the session chart.
+- [x] Add a UI-level completed benchmark test and session-chart rendering test with deterministic frame sampling.
